@@ -131,31 +131,36 @@ static void one_step(void)
 {
     static int times = 1;
     static double start_t = 0.0;
+    static double start_total_t = 0.0;
+    static double total_cells_p_s = 0.0;
     static double one_second = 0.0;
-    static double react_ns_p_cell = 0.0;
-    static double vel_ns_p_cell = 0.0;
-    static double dens_ns_p_cell = 0.0;
+    static double react_cells_p_s = 0.0;
+    static double vel_cells_p_s = 0.0;
+    static double dens_cells_p_s = 0.0;
 
+    start_total_t = wtime();
     start_t = wtime();
     react(dens_prev, u_prev, v_prev);
-    react_ns_p_cell += 1.0e9 * (wtime() - start_t) / (N * N);
+    react_cells_p_s += (N * N) / (wtime() - start_t);
 
     start_t = wtime();
     vel_step(N, u, v, u_prev, v_prev, visc, dt);
-    vel_ns_p_cell += 1.0e9 * (wtime() - start_t) / (N * N);
+    vel_cells_p_s += (N * N) / (wtime() - start_t);
 
     start_t = wtime();
     dens_step(N, dens, dens_prev, u, v, diff, dt);
-    dens_ns_p_cell += 1.0e9 * (wtime() - start_t) / (N * N);
+    dens_cells_p_s += (N * N) / (wtime() - start_t);
 
+    total_cells_p_s += (N * N) / (wtime() - start_total_t);
     if (1.0 < wtime() - one_second) { /* at least 1s between stats */
-        fprintf(stderr, "%lf, %lf, %lf, %lf: ns per cell total, react, vel_step, dens_step\n",
-               (react_ns_p_cell + vel_ns_p_cell + dens_ns_p_cell) / times,
-               react_ns_p_cell / times, vel_ns_p_cell / times, dens_ns_p_cell / times);
+        fprintf(stderr, "%lf, %lf, %lf, %lf: cells per second total step, react, vel_step, dens_step\n",
+                total_cells_p_s / times,
+                react_cells_p_s / times, vel_cells_p_s / times, dens_cells_p_s / times);
         one_second = wtime();
-        react_ns_p_cell = 0.0;
-        vel_ns_p_cell = 0.0;
-        dens_ns_p_cell = 0.0;
+        react_cells_p_s = 0.0;
+        vel_cells_p_s = 0.0;
+        dens_cells_p_s = 0.0;
+        total_cells_p_s = 0.0;
         times = 1;
     } else {
         times++;
@@ -215,7 +220,7 @@ int main(int argc, char** argv)
         one_step();
     }
     end_t = wtime();
-    printf("%g\n", end_t - start_t);
+    printf("%lf\n", ((N * N) * 2048) / (end_t - start_t));
     free_data();
 
     exit(0);
