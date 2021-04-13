@@ -149,7 +149,7 @@ static void one_step(void)
     dens_ns_p_cell += 1.0e9 * (wtime() - start_t) / (N * N);
 
     if (1.0 < wtime() - one_second) { /* at least 1s between stats */
-        printf("%lf, %lf, %lf, %lf: ns per cell total, react, vel_step, dens_step\n",
+        fprintf(stderr, "%lf, %lf, %lf, %lf: ns per cell total, react, vel_step, dens_step\n",
                (react_ns_p_cell + vel_ns_p_cell + dens_ns_p_cell) / times,
                react_ns_p_cell / times, vel_ns_p_cell / times, dens_ns_p_cell / times);
         one_second = wtime();
@@ -172,6 +172,8 @@ static void one_step(void)
 int main(int argc, char** argv)
 {
     int i = 0;
+    static double start_t = 0.0;
+    static double end_t = 0.0;
 
     if (argc != 1 && argc != 7) {
         fprintf(stderr, "usage : %s N dt diff visc force source\n", argv[0]);
@@ -207,9 +209,13 @@ int main(int argc, char** argv)
         exit(1);
     }
     clear_data();
+
+    start_t = wtime();
     for (i = 0; i < 2048; i++) {
         one_step();
     }
+    end_t = wtime();
+    printf("%g\n", end_t - start_t);
     free_data();
 
     exit(0);
