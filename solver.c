@@ -38,10 +38,16 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 
 static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float a, float c)
 {
+    float ac = a / c;
     for (unsigned int k = 0; k < 20; k++) {
         for (unsigned int i = 1; i <= n; i++) {
             for (unsigned int j = 1; j <= n; j++) {
-                x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] + x[IX(i, j - 1)] + x[IX(i, j + 1)])) / c;
+                float diagonal_SO = x[IX(i + 1, j)] + x[IX(i, j + 1)];
+                float diagonal_SO_ac = diagonal_SO * ac;
+                float diagonal_NE = x[IX(i - 1, j)] + x[IX(i, j - 1)];
+                float diagonal_NE_ac = diagonal_NE * ac;
+                float anterior_c = x0[IX(i,j)] / c;
+                x[IX(i, j)] = anterior_c + diagonal_SO_ac + diagonal_NE_ac;
             }
         }
         set_bnd(n, b, x);
