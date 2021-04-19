@@ -2,7 +2,7 @@
 
 #include "solver.h"
 
-#define IX(i, j) ((i) + (n + 2) * (j))
+#define IX(i, j) ((j) + (n + 2) * (i))
 #define SWAP(x0, x)      \
     {                    \
         float* tmp = x0; \
@@ -36,28 +36,39 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
 
-static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float a, float c)
+static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float* t_sed, float* t_abw, float a, float c)
 {
     float ac = a / c;
     for (unsigned int k = 0; k < 20; k++) {
+        // Sum up South East diagonals
+        for (unsigned int i = 1; i<=n; i++) {
+            for (unsigned int j=1; j<=n; j++) {
+                t_sed[IX(i,j)] = (x[IX(i+1, j)] + x[IX(i, j + 1)]) * ac;
+            }
+        }
+
+        for (unsigned int j = 1; j <= n; j++) {
+            t_abw[j] = x[IX(0,j)] * ac + t_sed[IX(1, j)];
+        }
+
         for (unsigned int i = 1; i <= n; i++) {
             for (unsigned int j = 1; j <= n; j++) {
-                float diagonal_SO = x[IX(i + 1, j)] + x[IX(i, j + 1)];
-                float diagonal_SO_ac = diagonal_SO * ac;
-                float diagonal_NE = x[IX(i - 1, j)] + x[IX(i, j - 1)];
-                float diagonal_NE_ac = diagonal_NE * ac;
+                float t_abw_ac = t_abw[j];
                 float anterior_c = x0[IX(i,j)] / c;
-                x[IX(i, j)] = anterior_c + diagonal_SO_ac + diagonal_NE_ac;
+                float independent = anterior_c + t_abw_ac;
+                float west_ac = x[IX(i, j - 1)] * ac;
+                x[IX(i, j)] =  independent + west_ac;
+                t_abw[j] = x[IX(i,j)] * ac + t_sed[IX(i + 1, j)];
             }
         }
         set_bnd(n, b, x);
     }
 }
 
-static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float diff, float dt)
+static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float* t_sed, float* t_abw, float diff, float dt)
 {
     float a = dt * diff * n * n;
-    lin_solve(n, b, x, x0, a, 1 + 4 * a);
+    lin_solve(n, b, x, x0, t_sed, t_abw, a, 1 + 4 * a);
 }
 
 static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
@@ -94,7 +105,7 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     set_bnd(n, b, d);
 }
 
-static void project(unsigned int n, float* u, float* v, float* p, float* div)
+static void project(unsigned int n, float* u, float* v, float* p, float* div, float* t_sed, float* t_abw)
 {
     for (unsigned int i = 1; i <= n; i++) {
         for (unsigned int j = 1; j <= n; j++) {
@@ -105,7 +116,7 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
     set_bnd(n, NONE, div);
     set_bnd(n, NONE, p);
 
-    lin_solve(n, NONE, p, div, 1, 4);
+    lin_solve(n, NONE, p, div, t_sed, t_abw, 1, 4);
 
     for (unsigned int i = 1; i <= n; i++) {
         for (unsigned int j = 1; j <= n; j++) {
@@ -117,27 +128,27 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
     set_bnd(n, HORIZONTAL, v);
 }
 
-void dens_step(unsigned int n, float* x, float* x0, float* u, float* v, float diff, float dt)
+void dens_step(unsigned int n, float* x, float* x0, float* u, float* v, float* t_sed, float* t_abw, float diff, float dt)
 {
     add_source(n, x, x0, dt);
     SWAP(x0, x);
-    diffuse(n, NONE, x, x0, diff, dt);
+    diffuse(n, NONE, x, x0, t_sed, t_abw, diff, dt);
     SWAP(x0, x);
     advect(n, NONE, x, x0, u, v, dt);
 }
 
-void vel_step(unsigned int n, float* u, float* v, float* u0, float* v0, float visc, float dt)
+void vel_step(unsigned int n, float* u, float* v, float* u0, float* v0, float* t_sed, float* t_abw, float visc, float dt)
 {
     add_source(n, u, u0, dt);
     add_source(n, v, v0, dt);
     SWAP(u0, u);
-    diffuse(n, VERTICAL, u, u0, visc, dt);
+    diffuse(n, VERTICAL, u, u0, t_sed, t_abw, visc, dt);
     SWAP(v0, v);
-    diffuse(n, HORIZONTAL, v, v0, visc, dt);
-    project(n, u, v, u0, v0);
+    diffuse(n, HORIZONTAL, v, v0, t_sed, t_abw, visc, dt);
+    project(n, u, v, u0, v0, t_sed, t_abw);
     SWAP(u0, u);
     SWAP(v0, v);
     advect(n, VERTICAL, u, u0, u0, v0, dt);
     advect(n, HORIZONTAL, v, v0, u0, v0, dt);
-    project(n, u, v, u0, v0);
+    project(n, u, v, u0, v0, t_sed, t_abw);
 }
