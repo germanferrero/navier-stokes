@@ -48,7 +48,7 @@ static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, flo
                     x[IX(i + 1, j)] * ac +
                     x[IX(i, j - 1)] * ac +
                     x[IX(i, j + 1)]
-                )
+                );
             }
         }
         set_bnd(n, b, x);
