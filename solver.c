@@ -38,7 +38,7 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 
 static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float a, float c)
 {
-    float ac = a / c
+    float ac = a / c;
     for (unsigned int k = 0; k < 20; k++) {
         for (unsigned int i = 1; i <= n; i++) {
             for (unsigned int j = 1; j <= n; j++) {
