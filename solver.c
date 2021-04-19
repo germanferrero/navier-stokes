@@ -46,7 +46,7 @@ static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, flo
                 t_sed[IX(i,j)] = (x[IX(i+1, j)] + x[IX(i, j + 1)]) * ac;
             }
         }
-
+        // Sum up All Bout West for first row
         for (unsigned int j = 1; j <= n; j++) {
             t_abw[j] = x[IX(0,j)] * ac + t_sed[IX(1, j)];
         }
@@ -58,6 +58,7 @@ static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, flo
                 float independent = anterior_c + t_abw_ac;
                 float west_ac = x[IX(i, j - 1)] * ac;
                 x[IX(i, j)] =  independent + west_ac;
+                // Sum up All Bout West for next row
                 t_abw[j] = x[IX(i,j)] * ac + t_sed[IX(i + 1, j)];
             }
         }
