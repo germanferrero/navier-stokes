@@ -228,12 +228,14 @@ int main(int argc, char** argv)
     }
     clear_data();
 
-    start_t = wtime();
-    for (i = 0; i < 2048; i++) {
+    for (i = 0; i < 256; i++) {
+        if (i == 64) {
+            start_t = wtime();
+        }
         one_step();
     }
     end_t = wtime();
-    printf("%lf\n", ((N * N) * 2048) / (end_t - start_t));
+    printf("%lf\n", ((N * N) * (256 - 64)) / (end_t - start_t));
     free_data();
 
     exit(0);
