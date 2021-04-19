@@ -34,6 +34,7 @@ static int dvel;
 
 static float *u, *v, *u_prev, *v_prev;
 static float *dens, *dens_prev;
+static float *t_sed, *t_abw;
 
 static int win_id;
 static int win_x, win_y;
@@ -68,6 +69,12 @@ static void free_data(void)
     if (dens_prev) {
         free(dens_prev);
     }
+    if (t_sed) {
+        free(t_sed);
+    }
+    if (t_abw) {
+        free(t_abw);
+    }
 }
 
 static void clear_data(void)
@@ -75,7 +82,11 @@ static void clear_data(void)
     int i, size = (N + 2) * (N + 2);
 
     for (i = 0; i < size; i++) {
-        u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = 0.0f;
+        u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = t_sed[i] = 0.0f;
+    }
+
+    for (i= 0; i< (N + 2); i ++) {
+        t_abw[i] = 0.0f;
     }
 }
 
@@ -89,15 +100,16 @@ static int allocate_data(void)
     v_prev = (float*)malloc(size * sizeof(float));
     dens = (float*)malloc(size * sizeof(float));
     dens_prev = (float*)malloc(size * sizeof(float));
+    t_sed = (float*)malloc(size * sizeof(float));
+    t_abw = (float*)malloc((N + 2) * sizeof(float));
 
-    if (!u || !v || !u_prev || !v_prev || !dens || !dens_prev) {
+    if (!u || !v || !u_prev || !v_prev || !dens || !dens_prev || !t_sed || !t_abw) {
         fprintf(stderr, "cannot allocate data\n");
         return (0);
     }
 
     return (1);
 }
-
 
 /*
   ----------------------------------------------------------------------
@@ -306,11 +318,11 @@ static void idle_func(void)
     react_cells_p_s += (N * N) / (wtime() - start_t);
 
     start_t = wtime();
-    vel_step(N, u, v, u_prev, v_prev, visc, dt);
+    vel_step(N, u, v, u_prev, v_prev, t_sed, t_abw, visc, dt);
     vel_cells_p_s += (N * N) / (wtime() - start_t);
 
     start_t = wtime();
-    dens_step(N, dens, dens_prev, u, v, diff, dt);
+    dens_step(N, dens, dens_prev, u, v, t_sed, t_abw, diff, dt);
     dens_cells_p_s += (N * N) / (wtime() - start_t);
 
     total_cells_p_s += (N * N) / (wtime() - start_total_t);

@@ -69,6 +69,9 @@ static void free_data(void)
     if (t_sed) {
         free(t_sed);
     }
+    if (t_abw) {
+        free(t_abw);
+    }
 }
 
 static void clear_data(void)
