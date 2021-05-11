@@ -69,7 +69,7 @@ static void free_data(void)
 
 static void clear_data(void)
 {
-    int i, size = (N + 2) * (N + 2);
+    int i, size = (N + 2) * (2 * (N + 2) - 1);
 
     for (i = 0; i < size; i++) {
         u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = 0.0f;
@@ -78,7 +78,7 @@ static void clear_data(void)
 
 static int allocate_data(void)
 {
-    int size = (N + 2) * (N + 2);
+    int size = (N + 2) * (2 * (N + 2) - 1);
 
     u = (float*)malloc(size * sizeof(float));
     v = (float*)malloc(size * sizeof(float));
@@ -98,7 +98,7 @@ static int allocate_data(void)
 
 static void react(float* d, float* u, float* v)
 {
-    int i, size = (N + 2) * (N + 2);
+    int i, size = (N + 2) * (2 * (N + 2) - 1);
     float max_velocity2 = 0.0f;
     float max_density = 0.0f;
 

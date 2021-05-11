@@ -2,7 +2,9 @@
 
 #include "solver.h"
 
-#define IX(i, j) ((i) + (n + 2) * (j))
+#define IX(i, j) ((j) + (n + 2) * (i + j)) 
+#define IXX(i, j) ((j) + (n + 2) * (i))
+
 #define SWAP(x0, x)      \
     {                    \
         float* tmp = x0; \
@@ -39,9 +41,24 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float a, float c)
 {
     for (unsigned int k = 0; k < 20; k++) {
-        for (unsigned int i = 1; i <= n; i++) {
-            for (unsigned int j = 1; j <= n; j++) {
-                x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] + x[IX(i, j - 1)] + x[IX(i, j + 1)])) / c;
+        for (unsigned int i = 2; i <= n+1; i++) {
+            for (unsigned int j = 1; j < i; j++) {
+                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
+                    x[IXX(i - 1, j)] +  // N
+                    x[IXX(i + 1, j)] + // S
+                    x[IXX(i - 1, j - 1)] + // W
+                    x[IXX(i + 1, j + 1)] // E
+                )) / c;
+            }
+        }
+        for (unsigned int i = n+2; i <= 2 * n; i++){
+            for (unsigned int j = i - n; j <= n; j++){
+                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
+                    x[IXX(i - 1, j)] +  // N
+                    x[IXX(i + 1, j)] + // S
+                    x[IXX(i - 1, j - 1)] + // W
+                    x[IXX(i + 1, j + 1)] // E
+                )) / c;
             }
         }
         set_bnd(n, b, x);
