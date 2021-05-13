@@ -18,7 +18,7 @@ typedef enum { NONE = 0,
 
 static void add_source(unsigned int n, float* x, const float* s, float dt)
 {
-    unsigned int size = (N + 2) * (2 * (N + 2) - 1);
+    unsigned int size = (n + 2) * (2 * (n + 2) - 1);
     for (unsigned int i = 0; i < size; i++) {
         x[i] += dt * s[i];
     }
