@@ -38,26 +38,16 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
 
-static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, float a, float c)
+static void lin_solve(const unsigned int n, boundary b, float *restrict x, const float *restrict x0, float a, float c)
 {
     for (unsigned int k = 0; k < 20; k++) {
-        for (unsigned int i = 2; i <= n+1; i++) {
-            for (unsigned int j = 1; j < i; j++) {
+        for (unsigned int i = 2; i <= 2 * (n+2) - 2 ; i++){
+            for (unsigned int j = 1; j < n + 1; j++){
                 x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
-                    x[IXX(i - 1, j)] +  // N
-                    x[IXX(i + 1, j)] + // S
-                    x[IXX(i - 1, j - 1)] + // W
-                    x[IXX(i + 1, j + 1)] // E
-                )) / c;
-            }
-        }
-        for (unsigned int i = n+2; i <= 2 * n; i++){
-            for (unsigned int j = i - n; j <= n; j++){
-                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
-                    x[IXX(i - 1, j)] +  // N
-                    x[IXX(i + 1, j)] + // S
-                    x[IXX(i - 1, j - 1)] + // W
-                    x[IXX(i + 1, j + 1)] // E
+                    x[IXX(i - 1, j)] +
+                    x[IXX(i + 1, j)] +
+                    x[IXX(i - 1, j - 1)] +
+                    x[IXX(i + 1, j + 1)]
                 )) / c;
             }
         }
@@ -71,16 +61,19 @@ static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
+static void advect(unsigned int n, boundary b, float *restrict d, const float *restrict d0, const float* u, const float* v, float dt)
 {
     int i0, i1, j0, j1;
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            x = i - dt0 * u[IX(i, j)];
-            y = j - dt0 * v[IX(i, j)];
+    for (unsigned int ix = 2; ix <= 2 * (n+2) - 2; ix++) {
+        // #pragma clang loop vectorize(enable)
+        for (unsigned int jx = 1; jx < n + 1; jx++) {
+            unsigned int i = ix - jx;
+            const unsigned int j = jx;
+            x = i - dt0 * u[IXX(ix, jx)];
+            y = j - dt0 * v[IXX(ix, jx)];
             if (x < 0.5f) {
                 x = 0.5f;
             } else if (x > n + 0.5f) {
@@ -99,18 +92,30 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
             s0 = 1 - s1;
             t1 = y - j0;
             t0 = 1 - t1;
-            d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+            d[IXX(ix, jx)] = s0 * (
+                t0 * d0[IX(i0, j0)]
+                + t1 * d0[IX(i0, j1)]
+            ) +
+            s1 * (
+                t0 * d0[IX(i1, j0)] +
+                t1 * d0[IX(i1, j1)]
+            );
         }
     }
     set_bnd(n, b, d);
 }
 
-static void project(unsigned int n, float* u, float* v, float* p, float* div)
+static void project(const unsigned int n, float *restrict u, float *restrict v, float *restrict p, float *restrict div)
 {
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            div[IX(i, j)] = -0.5f * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]) / n;
-            p[IX(i, j)] = 0;
+    for (unsigned int i = 2; i <= 2 * (n+2) - 2; i++) {
+        for (unsigned int j = 1; j < n + 1; j++) {
+            div[IXX(i, j)] = -0.5f * (
+                u[IXX(i + 1, j)] -
+                u[IXX(i - 1, j)] +
+                v[IXX(i + 1, j + 1)] -
+                v[IXX(i - 1, j - 1)]
+            ) / n;
+            p[IXX(i, j)] = 0;
         }
     }
     set_bnd(n, NONE, div);
@@ -118,10 +123,10 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            u[IX(i, j)] -= 0.5f * n * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
-            v[IX(i, j)] -= 0.5f * n * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
+    for (unsigned int i = 2; i <= 2 * (n+2) - 2; i++) {
+        for (unsigned int j = 1; j < n + 1; j++) {
+            u[IXX(i, j)] -= 0.5f * n * (p[IXX(i + 1, j)] - p[IXX(i - 1, j)]);
+            v[IXX(i, j)] -= 0.5f * n * (p[IXX(i + 1, j + 1)] - p[IXX(i - 1, j - 1)]);
         }
     }
     set_bnd(n, VERTICAL, u);
