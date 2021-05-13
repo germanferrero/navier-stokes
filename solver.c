@@ -61,15 +61,21 @@ static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-static void advect(unsigned int n, boundary b, float *restrict d, const float *restrict d0, const float* u, const float* v, float dt)
+static void advect(unsigned int n, boundary b, float *restrict d, const float* d0, const float* u, const float* v, float dt)
 {
     int i0, i1, j0, j1;
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
     for (unsigned int ix = 2; ix <= 2 * (n+2) - 2; ix++) {
-        // #pragma clang loop vectorize(enable)
+        #pragma clang loop vectorize(enable)
         for (unsigned int jx = 1; jx < n + 1; jx++) {
+            if (
+                ((ix > n + 1) && (jx < ix - n)) ||
+                ((ix <= n + 1) && (jx >= ix))
+            ) {
+                continue;
+            }
             unsigned int i = ix - jx;
             const unsigned int j = jx;
             x = i - dt0 * u[IXX(ix, jx)];
