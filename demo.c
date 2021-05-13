@@ -23,7 +23,7 @@
 
 /* macros */
 
-#define IX(i, j) ((j) + (N + 2) * (i + j)) 
+#define IX(i, j) ((j) + (N + 2) * ((i) + (j))) 
 
 
 /* global variables */

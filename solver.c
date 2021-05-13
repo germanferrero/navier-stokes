@@ -2,7 +2,7 @@
 
 #include "solver.h"
 
-#define IX(i, j) ((j) + (n + 2) * (i + j)) 
+#define IX(i, j) ((j) + (n + 2) * ((i) + (j))) 
 #define IXX(i, j) ((j) + (n + 2) * (i))
 
 #define SWAP(x0, x)      \
@@ -18,7 +18,7 @@ typedef enum { NONE = 0,
 
 static void add_source(unsigned int n, float* x, const float* s, float dt)
 {
-    unsigned int size = (n + 2) * (n + 2);
+    unsigned int size = (N + 2) * (2 * (N + 2) - 1);
     for (unsigned int i = 0; i < size; i++) {
         x[i] += dt * s[i];
     }
