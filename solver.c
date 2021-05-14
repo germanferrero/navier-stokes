@@ -41,18 +41,18 @@ static void lin_solve(unsigned int n, boundary b, float* x, const float* x0, flo
     float ac = a / c;
     for (unsigned int k = 0; k < 20; k++) {
         // Sum up South East diagonals
-        for (unsigned int i = 1; i<=n; i++) {
-            for (unsigned int j=1; j<=n; j++) {
+        for (unsigned int i = 1; i < n + 1; i++) {
+            for (unsigned int j=1; j < n + 1; j++) {
                 t_sed[IX(i,j)] = (x[IX(i+1, j)] + x[IX(i, j + 1)]) * ac;
             }
         }
         // Sum up All Bout West for first row
-        for (unsigned int j = 1; j <= n; j++) {
+        for (unsigned int j = 1; j < n + 1 ; j++) {
             t_abw[j] = x[IX(0,j)] * ac + t_sed[IX(1, j)];
         }
 
-        for (unsigned int i = 1; i <= n; i++) {
-            for (unsigned int j = 1; j <= n; j++) {
+        for (unsigned int i = 1; i < n + 1; i++) {
+            for (unsigned int j = 1; j < n + 1; j++) {
                 float t_abw_ac = t_abw[j];
                 float anterior_c = x0[IX(i,j)] / c;
                 float independent = anterior_c + t_abw_ac;
