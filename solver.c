@@ -41,13 +41,13 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 static void lin_solve(const unsigned int n, boundary b, float *restrict x, const float *restrict x0, float a, float c)
 {
     for (unsigned int k = 0; k < 20; k++) {
-        for (unsigned int i = 2; i <= 2 * (n+2) - 2 ; i++){
-            for (unsigned int j = 1; j < n + 1; j++){
-                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
-                    x[IXX(i - 1, j)] +
-                    x[IXX(i + 1, j)] +
-                    x[IXX(i - 1, j - 1)] +
-                    x[IXX(i + 1, j + 1)]
+        for (unsigned int ix = 2; ix <= 2*n ; ix++){
+            for (unsigned int jx = 1; jx < n + 1; jx++){
+                x[IXX(ix, jx)] = (x0[IXX(ix, jx)] + a * (
+                    x[IXX(ix - 1, jx)] +
+                    x[IXX(ix + 1, jx)] +
+                    x[IXX(ix - 1, jx - 1)] +
+                    x[IXX(ix + 1, jx + 1)]
                 )) / c;
             }
         }
@@ -67,15 +67,9 @@ static void advect(unsigned int n, boundary b, float *restrict d, const float* d
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
-    for (unsigned int ix = 2; ix <= 2 * (n+2) - 2; ix++) {
+    for (unsigned int ix = 2; ix <= 2 * n; ix++) {
         #pragma clang loop vectorize(enable)
         for (unsigned int jx = 1; jx < n + 1; jx++) {
-            if (
-                ((ix > n + 1) && (jx < ix - n)) ||
-                ((ix <= n + 1) && (jx >= ix))
-            ) {
-                continue;
-            }
             unsigned int i = ix - jx;
             const unsigned int j = jx;
             x = i - dt0 * u[IXX(ix, jx)];
@@ -113,15 +107,15 @@ static void advect(unsigned int n, boundary b, float *restrict d, const float* d
 
 static void project(const unsigned int n, float *restrict u, float *restrict v, float *restrict p, float *restrict div)
 {
-    for (unsigned int i = 2; i <= 2 * (n+2) - 2; i++) {
-        for (unsigned int j = 1; j < n + 1; j++) {
-            div[IXX(i, j)] = -0.5f * (
-                u[IXX(i + 1, j)] -
-                u[IXX(i - 1, j)] +
-                v[IXX(i + 1, j + 1)] -
-                v[IXX(i - 1, j - 1)]
+    for (unsigned int ix = 2; ix <= 2 * n; ix++) {
+        for (unsigned int jx = 1; jx < n + 1; jx++) {   
+            div[IXX(ix, jx)] = -0.5f * (
+                u[IXX(ix + 1, jx)] -
+                u[IXX(ix - 1, jx)] +
+                v[IXX(ix + 1, jx + 1)] -
+                v[IXX(ix - 1, jx - 1)]
             ) / n;
-            p[IXX(i, j)] = 0;
+            p[IXX(ix, jx)] = 0;
         }
     }
     set_bnd(n, NONE, div);
@@ -129,10 +123,10 @@ static void project(const unsigned int n, float *restrict u, float *restrict v, 
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    for (unsigned int i = 2; i <= 2 * (n+2) - 2; i++) {
-        for (unsigned int j = 1; j < n + 1; j++) {
-            u[IXX(i, j)] -= 0.5f * n * (p[IXX(i + 1, j)] - p[IXX(i - 1, j)]);
-            v[IXX(i, j)] -= 0.5f * n * (p[IXX(i + 1, j + 1)] - p[IXX(i - 1, j - 1)]);
+    for (unsigned int ix = 2; ix <= 2 * n; ix++) {
+        for (unsigned int jx = 1; jx < n + 1; jx++) {
+            u[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx)] - p[IXX(ix - 1, jx)]);
+            v[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx + 1)] - p[IXX(ix - 1, jx - 1)]);
         }
     }
     set_bnd(n, VERTICAL, u);
