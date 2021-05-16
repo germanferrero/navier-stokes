@@ -215,14 +215,14 @@ int main(int argc, char** argv)
     }
     clear_data();
 
-    for (i = 0; i < 8; i++) {
-        if (i == 2) {
+    for (i = 0; i < 256; i++) {
+        if (i == 16) {
             start_t = wtime();
         }
         one_step();
     }
     end_t = wtime();
-    printf("%lf\n", ((N * N) * (8 - 2)) / (end_t - start_t));
+    printf("%lf\n", ((N * N) * (256 - 16)) / (end_t - start_t));
     free_data();
 
     exit(0);
