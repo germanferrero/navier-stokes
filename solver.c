@@ -111,6 +111,7 @@ static void advect(unsigned int n, boundary b, float *restrict d, const float* d
                 t1 * d0[IX(i1, j1)]
             );
         }
+        #pragma clang loop vectorize(enable)
         for (unsigned int jx = ix - n ; jx < n + 1; jx++) {
             unsigned int i = ix - jx;
             const unsigned int j = jx;
