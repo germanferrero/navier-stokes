@@ -150,7 +150,7 @@ static void advect(unsigned int n, boundary b, float *restrict d, const float* d
 
 static void project(const unsigned int n, float *restrict u, float *restrict v, float *restrict p, float *restrict div)
 {
-    for (unsigned int ix = 2; ix <= 2 * n; ix++) {
+    for (unsigned int ix = 2; ix <= n+1; ix++) {
         for (unsigned int jx = 1; jx < ix; jx++) {   
             div[IXX(ix, jx)] = -0.5f * (
                 u[IXX(ix + 1, jx)] -
@@ -160,6 +160,8 @@ static void project(const unsigned int n, float *restrict u, float *restrict v, 
             ) / n;
             p[IXX(ix, jx)] = 0;
         }
+    }
+    for (unsigned int ix = n+2; ix <= 2 * n; ix++){
         for (unsigned int jx = ix - n ; jx < n + 1; jx++) {   
             div[IXX(ix, jx)] = -0.5f * (
                 u[IXX(ix + 1, jx)] -
@@ -175,11 +177,14 @@ static void project(const unsigned int n, float *restrict u, float *restrict v, 
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    for (unsigned int ix = 2; ix <= 2 * n; ix++) {
+    for (unsigned int ix = 2; ix <= n+1; ix++) {
         for (unsigned int jx = 1; jx < ix; jx++) {
             u[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx)] - p[IXX(ix - 1, jx)]);
             v[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx + 1)] - p[IXX(ix - 1, jx - 1)]);
         }
+    }
+
+    for (unsigned int ix = n+2; ix <= 2 * n; ix++){
         for (unsigned int jx = ix - n; jx < n + 1; jx++) {
             u[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx)] - p[IXX(ix - 1, jx)]);
             v[IXX(ix, jx)] -= 0.5f * n * (p[IXX(ix + 1, jx + 1)] - p[IXX(ix - 1, jx - 1)]);
