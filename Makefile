@@ -2,7 +2,7 @@ CC=clang-12
 CFLAGS=-std=c11 -Wall -Wextra -Wno-unused-parameter $(CEXTRAFLAGS)
 LDFLAGS=
 
-TARGETS=demo headless
+TARGETS=demo headless test
 SOURCES=$(shell echo *.c)
 COMMON_OBJECTS=solver.o wtime.o
 
@@ -14,6 +14,9 @@ demo: demo.o $(COMMON_OBJECTS)
 headless: headless.o $(COMMON_OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
+test: test.o $(COMMON_OBJECTS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+ 
 clean:
 	rm -f $(TARGETS) *.o .depend *~
 
