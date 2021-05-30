@@ -4,7 +4,6 @@
 
 #define IX(i, j) ((j) + (n + 2) * ((i) + (j))) 
 #define IXX(i, j) ((j) + (n + 2) * (i))
-
 #define SWAP(x0, x)      \
     {                    \
         float* tmp = x0; \
@@ -15,6 +14,8 @@
 typedef enum { NONE = 0,
                VERTICAL = 1,
                HORIZONTAL = 2 } boundary;
+
+const unsigned int BLOCK_SIZE = 1024;
 
 static void add_source(unsigned int n, float* x, const float* s, float dt)
 {
@@ -41,24 +42,62 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 static void lin_solve(const unsigned int n, boundary b, float *restrict x, const float *restrict x0, float a, float c)
 {
     for (unsigned int k = 0; k < 20; k++) {
-        for (unsigned int i = 2; i <= n+1; i++) {
-            for (unsigned int j = 1; j < i; j++) {
-                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
-                    x[IXX(i - 1, j)] +  // N
-                    x[IXX(i + 1, j)] + // S
-                    x[IXX(i - 1, j - 1)] + // W
-                    x[IXX(i + 1, j + 1)] // E
-                )) / c;
+        for (unsigned int dix = 2; dix <= n - BLOCK_SIZE + 2; dix+=BLOCK_SIZE) {
+            #pragma omp parallel for
+            for (unsigned int djx = 1; djx < dix; djx+=BLOCK_SIZE) {
+                for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
+                    for (unsigned int j = 0; j < i + 1; j++) {
+                        const unsigned int io = i + dix;
+                        const unsigned int jo = j + djx;
+                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                            x[IXX(io - 1, jo)] +  // N
+                            x[IXX(io + 1, jo)] + // S
+                            x[IXX(io - 1, jo - 1)] + // W
+                            x[IXX(io + 1, jo + 1)] // E
+                        )) / c;
+                    }
+                }
+                for (unsigned int i = BLOCK_SIZE; i < (BLOCK_SIZE * 2) - 1; i++){
+                    for (unsigned int j = (i - BLOCK_SIZE) + 1; j < BLOCK_SIZE; j++){
+                        const unsigned int io = i + dix;
+                        const unsigned int jo = j + djx;
+                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                            x[IXX(io - 1, jo)] +  // N
+                            x[IXX(io + 1, jo)] + // S
+                            x[IXX(io - 1, jo - 1)] + // W
+                            x[IXX(io + 1, jo + 1)] // E
+                        )) / c;
+                    }
+                }
             }
         }
-        for (unsigned int i = n+2; i <= 2 * n; i++){
-            for (unsigned int j = i - n; j < n + 1; j++){
-                x[IXX(i,j)] = (x0[IXX(i, j)] + a * (
-                    x[IXX(i - 1, j)] +  // N
-                    x[IXX(i + 1, j)] + // S
-                    x[IXX(i - 1, j - 1)] + // W
-                    x[IXX(i + 1, j + 1)] // E
-                )) / c;
+        for (unsigned int dix = n+2; dix <= 2*n; dix+=BLOCK_SIZE) {
+            #pragma omp parallel for
+            for (unsigned int djx = dix - n + BLOCK_SIZE - 1; djx < n + 1; djx+=BLOCK_SIZE) {
+                for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
+                    for (unsigned int j = 0; j < i + 1; j++) {
+                        const unsigned int io = i + dix;
+                        const unsigned int jo = j + djx;
+                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                            x[IXX(io - 1, jo)] +  // N
+                            x[IXX(io + 1, jo)] + // S
+                            x[IXX(io - 1, jo - 1)] + // W
+                            x[IXX(io + 1, jo + 1)] // E
+                        )) / c;
+                    }
+                }
+                for (unsigned int i = BLOCK_SIZE; i < (BLOCK_SIZE * 2) - 1; i++){
+                    for (unsigned int j = (i - BLOCK_SIZE) + 1; j < BLOCK_SIZE; j++){
+                        const unsigned int io = i + dix;
+                        const unsigned int jo = j + djx;
+                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                            x[IXX(io - 1, jo)] +  // N
+                            x[IXX(io + 1, jo)] + // S
+                            x[IXX(io - 1, jo - 1)] + // W
+                            x[IXX(io + 1, jo + 1)] // E
+                        )) / c;
+                    }
+                }
             }
         }
         set_bnd(n, b, x);
