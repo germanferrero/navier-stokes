@@ -39,65 +39,46 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
 
+static void lin_solve_block(const unsigned int n, float * restrict x, const float * restrict x0, unsigned int dix, unsigned int djx, float a, float c) {
+    for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
+        for (unsigned int j = 0; j < i + 1; j++) {
+            const unsigned int io = i + dix;
+            const unsigned int jo = j + djx;
+            x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                x[IXX(io - 1, jo)] +  // N
+                x[IXX(io + 1, jo)] + // S
+                x[IXX(io - 1, jo - 1)] + // W
+                x[IXX(io + 1, jo + 1)] // E
+            )) / c;
+        }
+    }
+    for (unsigned int i = BLOCK_SIZE; i < (BLOCK_SIZE * 2) - 1; i++){
+        for (unsigned int j = (i - BLOCK_SIZE) + 1; j < BLOCK_SIZE; j++){
+            const unsigned int io = i + dix;
+            const unsigned int jo = j + djx;
+            x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
+                x[IXX(io - 1, jo)] +  // N
+                x[IXX(io + 1, jo)] + // S
+                x[IXX(io - 1, jo - 1)] + // W
+                x[IXX(io + 1, jo + 1)] // E
+            )) / c;
+        }
+    }
+}
+
 static void lin_solve(const unsigned int n, boundary b, float *restrict x, const float *restrict x0, float a, float c)
 {
     for (unsigned int k = 0; k < 20; k++) {
         for (unsigned int dix = 2; dix <= n - BLOCK_SIZE + 2; dix+=BLOCK_SIZE) {
             #pragma omp parallel for
             for (unsigned int djx = 1; djx < dix; djx+=BLOCK_SIZE) {
-                for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
-                    for (unsigned int j = 0; j < i + 1; j++) {
-                        const unsigned int io = i + dix;
-                        const unsigned int jo = j + djx;
-                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
-                            x[IXX(io - 1, jo)] +  // N
-                            x[IXX(io + 1, jo)] + // S
-                            x[IXX(io - 1, jo - 1)] + // W
-                            x[IXX(io + 1, jo + 1)] // E
-                        )) / c;
-                    }
-                }
-                for (unsigned int i = BLOCK_SIZE; i < (BLOCK_SIZE * 2) - 1; i++){
-                    for (unsigned int j = (i - BLOCK_SIZE) + 1; j < BLOCK_SIZE; j++){
-                        const unsigned int io = i + dix;
-                        const unsigned int jo = j + djx;
-                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
-                            x[IXX(io - 1, jo)] +  // N
-                            x[IXX(io + 1, jo)] + // S
-                            x[IXX(io - 1, jo - 1)] + // W
-                            x[IXX(io + 1, jo + 1)] // E
-                        )) / c;
-                    }
-                }
+                lin_solve_block(n, x, x0, dix, djx, a, c);
             }
         }
         for (unsigned int dix = n+2; dix <= 2*n; dix+=BLOCK_SIZE) {
             #pragma omp parallel for
             for (unsigned int djx = dix - n + BLOCK_SIZE - 1; djx < n + 1; djx+=BLOCK_SIZE) {
-                for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
-                    for (unsigned int j = 0; j < i + 1; j++) {
-                        const unsigned int io = i + dix;
-                        const unsigned int jo = j + djx;
-                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
-                            x[IXX(io - 1, jo)] +  // N
-                            x[IXX(io + 1, jo)] + // S
-                            x[IXX(io - 1, jo - 1)] + // W
-                            x[IXX(io + 1, jo + 1)] // E
-                        )) / c;
-                    }
-                }
-                for (unsigned int i = BLOCK_SIZE; i < (BLOCK_SIZE * 2) - 1; i++){
-                    for (unsigned int j = (i - BLOCK_SIZE) + 1; j < BLOCK_SIZE; j++){
-                        const unsigned int io = i + dix;
-                        const unsigned int jo = j + djx;
-                        x[IXX(io,jo)] = (x0[IXX(io, jo)] + a * (
-                            x[IXX(io - 1, jo)] +  // N
-                            x[IXX(io + 1, jo)] + // S
-                            x[IXX(io - 1, jo - 1)] + // W
-                            x[IXX(io + 1, jo + 1)] // E
-                        )) / c;
-                    }
-                }
+                lin_solve_block(n, x, x0, dix, djx, a, c);
             }
         }
         set_bnd(n, b, x);
