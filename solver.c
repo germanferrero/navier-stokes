@@ -126,10 +126,10 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
 
 static void project_before_rb_step(grid_color color,
                               unsigned int n,
-                              float * div,
+                              float * restrict div,
                               const float * u,
                               const float * v,
-                              float * p)
+                              float * restrict p)
 {
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
@@ -145,7 +145,27 @@ static void project_before_rb_step(grid_color color,
                                   (-shift * v[index])) / n;
             p[index] = 0;
         }
-    }    
+    } 
+}
+
+static void project_after_rb_step(grid_color color,
+                              unsigned int n,
+                              float * restrict u,
+                              float * restrict v,
+                              const float * p)
+{
+    int shift = color == RED ? 1 : -1;
+    unsigned int start = color == RED ? 0 : 1;
+
+    unsigned int width = (n + 2) / 2;
+
+    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
+        for (unsigned int x = start; x < width - (1 - start); ++x) {
+            int index = IXX(y, x, width);
+            u[index] -= 0.5f * n * (p[index + width] - p[index - width]);
+            v[index] -= 0.5f * n * ((shift * p[index + shift]) + (-shift * p[index]));
+        }
+    }
 }
 
 static void project(unsigned int n, float* u, float* v, float* p, float* div)
@@ -166,12 +186,8 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            u[IX(i, j)] -= 0.5f * n * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
-            v[IX(i, j)] -= 0.5f * n * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
-        }
-    }
+    project_after_rb_step(RED, n, red_u, red_v, blk_p);
+    project_after_rb_step(BLACK, n, blk_u, blk_v, red_p);
     set_bnd(n, VERTICAL, u);
     set_bnd(n, HORIZONTAL, v);
 }
