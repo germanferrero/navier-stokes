@@ -90,16 +90,31 @@ static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
+static void advect_rb_step(grid_color color,
+                           unsigned int n,
+                           float * restrict d,
+                           const float * d0,
+                           const float * u,
+                           const float * v,
+                           float dt0)
 {
+    
     int i0, i1, j0, j1;
     float x, y, s0, t0, s1, t1;
+    
+    int shift = color == RED ? 1 : -1;
+    unsigned int start = color == RED ? 0 : 1;
 
-    float dt0 = dt * n;
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            x = i - dt0 * u[IX(i, j)];
-            y = j - dt0 * v[IX(i, j)];
+    unsigned int width = (n + 2) / 2;
+
+
+    for (unsigned int yit = 1; yit <= n; ++yit, shift = -shift, start = 1 - start) {
+        for (unsigned int xit = start; xit < width - (1 - start); ++xit) {
+            int i = yit;
+            int j = 1 - start  + 2 * xit;
+            int index = IXX(yit, xit, width);
+            x = i - dt0 * u[index];
+            y = j - dt0 * v[index];
             if (x < 0.5f) {
                 x = 0.5f;
             } else if (x > n + 0.5f) {
@@ -118,9 +133,23 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
             s0 = 1 - s1;
             t1 = y - j0;
             t0 = 1 - t1;
-            d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+            d[index] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
         }
     }
+}
+
+static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
+{
+    unsigned int color_size = (n + 2) * ((n + 2) / 2);
+    float * red_d = d;
+    float * blk_d = d + color_size;
+    const float * red_u = u;
+    const float * blk_u = u + color_size;
+    const float * red_v = v;
+    const float * blk_v = v + color_size;
+    float dt0 = dt * n;
+    advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
+    advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
     set_bnd(n, b, d);
 }
 
@@ -171,10 +200,10 @@ static void project_after_rb_step(grid_color color,
 static void project(unsigned int n, float* u, float* v, float* p, float* div)
 {
     unsigned int color_size = (n + 2) * ((n + 2) / 2);
-    const float * red_v = v;
-    const float * blk_v = v + color_size;
-    const float * red_u = u;
-    const float * blk_u = u + color_size;
+    float * red_v = v;
+    float * blk_v = v + color_size;
+    float * red_u = u;
+    float * blk_u = u + color_size;
     float * red_div = div;
     float * blk_div = div + color_size;
     float * red_p = p;
