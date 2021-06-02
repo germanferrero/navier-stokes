@@ -139,15 +139,6 @@ static void project_before_rb_step(grid_color color,
     for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
         for (unsigned int x = start; x < width - (1 - start); ++x) {
             int index = IXX(y, x, width);
-            if (color == RED && index == 12) {
-                fprintf(stderr, "%d: %.2f - %.2f + %.2f + %.2f\n",
-                    index,
-                    u[index + width],
-                    u[index - width],
-                    (shift * v[index + shift]),
-                    (-shift * v[index])
-                );
-            }
             div[index] = -0.5f * (u[index + width] -
                                   u[index - width] +
                                   (shift * v[index + shift]) +
