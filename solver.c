@@ -1,9 +1,11 @@
 #include <stddef.h>
+#include <stdio.h>
 
 #include "solver.h"
 #include "indices.h"
 
-#define IX(x,y) (rb_idx((x),(y),(n+2)))
+#define IX(y,x) (rb_idx((y),(x),(n+2)))
+#define IXX(y, x, stride) ((x) + (y) * (stride))
 
 #define SWAP(x0, x)      \
     {                    \
@@ -55,7 +57,7 @@ static void lin_solve_rb_step(grid_color color,
 
     for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
         for (unsigned int x = start; x < width - (1 - start); ++x) {
-            int index = idx(x, y, width);
+            int index = IXX(y, x, width);
             same[index] = (same0[index] + a * (neigh[index - width] +
                                                neigh[index] +
                                                neigh[index + shift] +
@@ -122,14 +124,52 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     set_bnd(n, b, d);
 }
 
+static void project_before_rb_step(grid_color color,
+                              unsigned int n,
+                              float * div,
+                              const float * u,
+                              const float * v,
+                              float * p)
+{
+    int shift = color == RED ? 1 : -1;
+    unsigned int start = color == RED ? 0 : 1;
+
+    unsigned int width = (n + 2) / 2;
+
+    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
+        for (unsigned int x = start; x < width - (1 - start); ++x) {
+            int index = IXX(y, x, width);
+            if (color == RED && index == 12) {
+                fprintf(stderr, "%d: %.2f - %.2f + %.2f + %.2f\n",
+                    index,
+                    u[index + width],
+                    u[index - width],
+                    (shift * v[index + shift]),
+                    (-shift * v[index])
+                );
+            }
+            div[index] = -0.5f * (u[index + width] -
+                                  u[index - width] +
+                                  (shift * v[index + shift]) +
+                                  (-shift * v[index])) / n;
+            p[index] = 0;
+        }
+    }    
+}
+
 static void project(unsigned int n, float* u, float* v, float* p, float* div)
 {
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
-            div[IX(i, j)] = -0.5f * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]) / n;
-            p[IX(i, j)] = 0;
-        }
-    }
+    unsigned int color_size = (n + 2) * ((n + 2) / 2);
+    const float * red_v = v;
+    const float * blk_v = v + color_size;
+    const float * red_u = u;
+    const float * blk_u = u + color_size;
+    float * red_div = div;
+    float * blk_div = div + color_size;
+    float * red_p = p;
+    float * blk_p = p + color_size;
+    project_before_rb_step(RED, n, red_div, blk_u, blk_v, red_p);
+    project_before_rb_step(BLACK, n, blk_div, red_u, red_v, blk_p);
     set_bnd(n, NONE, div);
     set_bnd(n, NONE, p);
 
