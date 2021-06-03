@@ -55,7 +55,10 @@ static void lin_solve_rb_step(grid_color color,
 
     unsigned int width = (n + 2) / 2;
 
-    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
+    #pragma omp parallel for schedule(static, 16) default(none) shared(same, same0, neigh) firstprivate(n, shift, start, width, a, c)
+    for (unsigned int y = 1; y <= n; ++y) {
+        const int p_shift = y % 2 == 0 ? -shift: shift;
+        const int p_start = y % 2 == 0 ? 1 - start: start;
         for (unsigned int x = start; x < width - (1 - start); ++x) {
             int index = IXX(y, x, width);
             same[index] = (same0[index] + a * (neigh[index - width] +
