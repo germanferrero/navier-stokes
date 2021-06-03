@@ -59,11 +59,11 @@ static void lin_solve_rb_step(grid_color color,
     for (unsigned int y = 1; y <= n; ++y) {
         const int p_shift = y % 2 == 0 ? -shift: shift;
         const int p_start = y % 2 == 0 ? 1 - start: start;
-        for (unsigned int x = start; x < width - (1 - start); ++x) {
+        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
             int index = IXX(y, x, width);
             same[index] = (same0[index] + a * (neigh[index - width] +
                                                neigh[index] +
-                                               neigh[index + shift] +
+                                               neigh[index + p_shift] +
                                                neigh[index + width])) / c;
         }
     }
