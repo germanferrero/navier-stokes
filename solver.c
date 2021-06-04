@@ -55,7 +55,7 @@ static void lin_solve_rb_step(grid_color color,
 
     unsigned int width = (n + 2) / 2;
 
-    #pragma omp parallel for schedule(static, 16) default(none) shared(same, same0, neigh) firstprivate(n, shift, start, width, a, c)
+    #pragma omp parallel for default(none) shared(same, same0, neigh) firstprivate(n, shift, start, width, a, c)
     for (unsigned int y = 1; y <= n; ++y) {
         const int p_shift = y % 2 == 0 ? -shift: shift;
         const int p_start = y % 2 == 0 ? 1 - start: start;
@@ -105,16 +105,17 @@ static void advect_rb_step(grid_color color,
     int i0, i1, j0, j1;
     float x, y, s0, t0, s1, t1;
     
-    int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
 
     unsigned int width = (n + 2) / 2;
 
 
-    for (unsigned int yit = 1; yit <= n; ++yit, shift = -shift, start = 1 - start) {
-        for (unsigned int xit = start; xit < width - (1 - start); ++xit) {
+    #pragma omp parallel for default(none) shared(u, v, d0, d) firstprivate(n, start, width, dt0) private(i0, i1, j0, j1, x, y, s0, t0, s1, t1)
+    for (unsigned int yit = 1; yit <= n; ++yit) {
+        const int p_start = yit % 2 == 0 ? 1 - start: start;
+        for (unsigned int xit = p_start; xit < width - (1 - p_start); ++xit) {
             int i = yit;
-            int j = 1 - start  + 2 * xit;
+            int j = 1 - p_start  + 2 * xit;
             int index = IXX(yit, xit, width);
             x = i - dt0 * u[index];
             y = j - dt0 * v[index];
@@ -168,13 +169,16 @@ static void project_before_rb_step(grid_color color,
 
     unsigned int width = (n + 2) / 2;
 
-    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
-        for (unsigned int x = start; x < width - (1 - start); ++x) {
+    #pragma omp parallel for default(none) shared(u, v, div, p) firstprivate(n, shift, start, width)
+    for (unsigned int y = 1; y <= n; ++y) {
+        const int p_shift = y % 2 == 0 ? -shift: shift;
+        const int p_start = y % 2 == 0 ? 1 - start: start;
+        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
             int index = IXX(y, x, width);
             div[index] = -0.5f * (u[index + width] -
                                   u[index - width] +
-                                  (shift * v[index + shift]) +
-                                  (-shift * v[index])) / n;
+                                  (p_shift * v[index + p_shift]) +
+                                  (-p_shift * v[index])) / n;
             p[index] = 0;
         }
     } 
@@ -191,11 +195,14 @@ static void project_after_rb_step(grid_color color,
 
     unsigned int width = (n + 2) / 2;
 
-    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
-        for (unsigned int x = start; x < width - (1 - start); ++x) {
+    #pragma omp parallel for default(none) shared(u, v, p) firstprivate(n, shift, start, width)
+    for (unsigned int y = 1; y <= n; ++y) {
+        const int p_shift = y % 2 == 0 ? -shift: shift;
+        const int p_start = y % 2 == 0 ? 1 - start: start;
+        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
             int index = IXX(y, x, width);
             u[index] -= 0.5f * n * (p[index + width] - p[index - width]);
-            v[index] -= 0.5f * n * ((shift * p[index + shift]) + (-shift * p[index]));
+            v[index] -= 0.5f * n * ((p_shift * p[index + p_shift]) + (-p_shift * p[index]));
         }
     }
 }
