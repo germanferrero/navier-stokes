@@ -152,8 +152,11 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     const float * red_v = v;
     const float * blk_v = v + color_size;
     float dt0 = dt * n;
-    advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
-    advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
+    #pragma omp parallel
+    {
+        advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
+        advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
+    }
     set_bnd(n, b, d);
 }
 
