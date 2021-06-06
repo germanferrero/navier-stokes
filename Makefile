@@ -1,4 +1,4 @@
-CC=clang-12
+CC=clang-11
 CFLAGS=-std=c11 -Wall -Wextra -Wno-unused-parameter $(CEXTRAFLAGS)
 LDFLAGS=
 
