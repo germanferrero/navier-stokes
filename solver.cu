@@ -137,53 +137,77 @@ static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-static void advect_rb_step(grid_color color,
-                           unsigned int n,
-                           float * d,
-                           const float * d0,
-                           const float * u,
-                           const float * v,
-                           float dt0)
+__global__ void kernel_advect_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * d,
+    const float * d0,
+    const float * u,
+    const float * v,
+    float dt0)
 {
+    unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int index = IXX(y, x, width);
+    
+    int start_first_row = color == RED ? 0 : 1;
+    int start = y % 2 == 1 ? start_first_row : 1 - start_first_row;
+    if (x < start) {
+        return;
+    }
+    if (x >= width + start - 1) {
+        return;
+    }
+    if (y == 0 || y >= n+1) {
+        return;
+    }
     
     int i0, i1, j0, j1;
-    float x, y, s0, t0, s1, t1;
-    
-    unsigned int start = color == RED ? 0 : 1;
+    float x_, y_, s0, t0, s1, t1;
 
-    unsigned int width = (n + 2) / 2;
-
-
-    #pragma omp parallel for default(none) shared(u, v, d0, d) firstprivate(n, start, width, dt0) private(i0, i1, j0, j1, x, y, s0, t0, s1, t1)
-    for (unsigned int yit = 1; yit <= n; ++yit) {
-        const int p_start = yit % 2 == 0 ? 1 - start: start;
-        for (unsigned int xit = p_start; xit < width - (1 - p_start); ++xit) {
-            int i = yit;
-            int j = 1 - p_start  + 2 * xit;
-            int index = IXX(yit, xit, width);
-            x = i - dt0 * u[index];
-            y = j - dt0 * v[index];
-            if (x < 0.5f) {
-                x = 0.5f;
-            } else if (x > n + 0.5f) {
-                x = n + 0.5f;
-            }
-            i0 = (int)x;
-            i1 = i0 + 1;
-            if (y < 0.5f) {
-                y = 0.5f;
-            } else if (y > n + 0.5f) {
-                y = n + 0.5f;
-            }
-            j0 = (int)y;
-            j1 = j0 + 1;
-            s1 = x - i0;
-            s0 = 1 - s1;
-            t1 = y - j0;
-            t0 = 1 - t1;
-            d[index] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
-        }
+    int i = y;
+    int j = 1 - start + 2 * x;
+    x_ = i - dt0 * u[index];
+    y_ = j - dt0 * v[index];
+    if (x_ < 0.5f) {
+        x_ = 0.5f;
+    } else if (x_ > n + 0.5f) {
+        x_ = n + 0.5f;
     }
+    i0 = (int)x_;
+    i1 = i0 + 1;
+    if (y_ < 0.5f) {
+        y_ = 0.5f;
+    } else if (y_ > n + 0.5f) {
+        y_ = n + 0.5f;
+    }
+    j0 = (int)y_;
+    j1 = j0 + 1;
+    s1 = x_ - i0;
+    s0 = 1 - s1;
+    t1 = y_ - j0;
+    t0 = 1 - t1;
+    d[index] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+}
+
+void launcher_advect_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * d,
+    const float * d0,
+    const float * u,
+    const float * v,
+    float dt0)
+{
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(n + 2, (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
+    kernel_advect_rb_step<<<grid, block>>>(color, n, d, d0, u, v, dt0);
+    cudaGetLastError();
+    cudaDeviceSynchronize();
 }
 
 static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
@@ -196,8 +220,8 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     const float * red_v = v;
     const float * blk_v = v + color_size;
     float dt0 = dt * n;
-    advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
-    advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
+    launcher_advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
+    launcher_advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
     launcher_set_bnd(n, b, d);
 }
 
