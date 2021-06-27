@@ -78,7 +78,7 @@ void launcher_linsolve_rb_step(grid_color color,
     unsigned int N_BLOCKS_Y = div_ceil(n + 2, (uint) BLOCK_SIZE);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
-    kernel_linsolve<<<grid, block>>>(color, n, a, c, same0, neigh, same);
+    kernel_linsolve_rb_step<<<grid, block>>>(color, n, a, c, same0, neigh, same);
     cudaGetLastError();
     cudaDeviceSynchronize();
 }
