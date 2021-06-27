@@ -18,7 +18,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "indices.h"
+#include <cuda_runtime.h>
 
+#include "cuda_helper.h"
 #include "solver.h"
 #include "wtime.h"
 
@@ -52,22 +54,22 @@ static int omx, omy, mx, my;
 static void free_data(void)
 {
     if (u) {
-        free(u);
+        checkCudaCall(cudaFree(u));
     }
     if (v) {
-        free(v);
+        checkCudaCall(cudaFree(v));
     }
     if (u_prev) {
-        free(u_prev);
+        checkCudaCall(cudaFree(u_prev));
     }
     if (v_prev) {
-        free(v_prev);
+        checkCudaCall(cudaFree(v_prev));
     }
     if (dens) {
-        free(dens);
+        checkCudaCall(cudaFree(dens));
     }
     if (dens_prev) {
-        free(dens_prev);
+        checkCudaCall(cudaFree(dens_prev));
     }
 }
 
@@ -84,21 +86,15 @@ static int allocate_data(void)
 {
     int size = (N + 2) * (N + 2);
 
-    u = (float*)malloc(size * sizeof(float));
-    v = (float*)malloc(size * sizeof(float));
-    u_prev = (float*)malloc(size * sizeof(float));
-    v_prev = (float*)malloc(size * sizeof(float));
-    dens = (float*)malloc(size * sizeof(float));
-    dens_prev = (float*)malloc(size * sizeof(float));
-
-    if (!u || !v || !u_prev || !v_prev || !dens || !dens_prev) {
-        fprintf(stderr, "cannot allocate data\n");
-        return (0);
-    }
+    checkCudaCall(cudaMallocManaged(&u, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&v, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&u_prev, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&v_prev, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&dens, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&dens_prev, size * sizeof(float)));
 
     return (1);
 }
-
 
 /*
   ----------------------------------------------------------------------

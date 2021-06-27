@@ -1,11 +1,15 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <cuda_runtime.h>
 
+#include "cuda_helper.h"
 #include "solver.h"
 #include "indices.h"
 
 #define IX(y,x) (rb_idx((y),(x),(n+2)))
 #define IXX(y, x, stride) ((x) + (y) * (stride))
+
+#define BLOCK_SIZE 1
 
 #define SWAP(x0, x)      \
     {                    \
@@ -19,6 +23,65 @@ typedef enum { NONE = 0,
                HORIZONTAL = 2 } boundary;
 
 typedef enum { RED, BLACK } grid_color;
+
+template <typename T>
+T div_ceil(T a, T b) {
+    return (a + b - 1) / b;
+}
+
+__global__ void kernel_linsolve(grid_color color,
+                                        unsigned int n,
+                                        float a,
+                                        float c,
+                                        const float * same0,
+                                        const float * neigh,
+                                        float * same
+)
+{
+    unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int index = IXX(y, x, width);
+    
+    int start_first_row = color == RED ? 0 : 1;
+    int start = y % 2 == 1 ? start_first_row : 1 - start_first_row;
+    if (x < start) {
+        return;
+    }
+    if (x >= width + start - 1) {
+        return;
+    }
+    if (y == 0 || y >= n+1) {
+        return;
+    }
+    
+    int shift_first_row = color == RED ? 1 : -1;
+    int shift = y % 2 == 1 ? shift_first_row: -shift_first_row;
+    same[index] = (same0[index] + a * (
+        neigh[index - width] +
+        neigh[index] +
+        neigh[index + shift] +
+        neigh[index + width]
+    )) / c;
+}
+
+void lin_solve_rb_step(grid_color color,
+                              unsigned int n,
+                              float a,
+                              float c,
+                              const float * same0,
+                              const float * neigh,
+                              float * same)
+{
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(n + 2, (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
+    kernel_linsolve<<<grid, block>>>(color, n, a, c, same0, neigh, same);
+    cudaGetLastError();
+    cudaDeviceSynchronize();
+}
 
 static void add_source(unsigned int n, float* x, const float* s, float dt)
 {
@@ -42,36 +105,10 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
 
-static void lin_solve_rb_step(grid_color color,
-                              unsigned int n,
-                              float a,
-                              float c,
-                              const float * restrict same0,
-                              const float * restrict neigh,
-                              float * restrict same)
-{
-    int shift = color == RED ? 1 : -1;
-    unsigned int start = color == RED ? 0 : 1;
-
-    unsigned int width = (n + 2) / 2;
-
-    #pragma omp parallel for default(none) shared(same, same0, neigh) firstprivate(n, shift, start, width, a, c)
-    for (unsigned int y = 1; y <= n; ++y) {
-        const int p_shift = y % 2 == 0 ? -shift: shift;
-        const int p_start = y % 2 == 0 ? 1 - start: start;
-        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
-            int index = IXX(y, x, width);
-            same[index] = (same0[index] + a * (neigh[index - width] +
-                                               neigh[index] +
-                                               neigh[index + p_shift] +
-                                               neigh[index + width])) / c;
-        }
-    }
-}
 
 static void lin_solve(unsigned int n, boundary b,
-                      float * restrict x,
-                      const float * restrict x0,
+                      float * x,
+                      const float * x0,
                       float a, float c)
 {
     unsigned int color_size = (n + 2) * ((n + 2) / 2);
@@ -79,9 +116,9 @@ static void lin_solve(unsigned int n, boundary b,
     const float * blk0 = x0 + color_size;
     float * red = x;
     float * blk = x + color_size;
-
+    
     for (unsigned int k = 0; k < 20; ++k) {
-        lin_solve_rb_step(RED,   n, a, c, red0, blk, red);
+        lin_solve_rb_step(RED, n, a, c, red0, blk, red);
         lin_solve_rb_step(BLACK, n, a, c, blk0, red, blk);
         set_bnd(n, b, x);
     }
@@ -95,7 +132,7 @@ static void diffuse(unsigned int n, boundary b, float* x, const float* x0, float
 
 static void advect_rb_step(grid_color color,
                            unsigned int n,
-                           float * restrict d,
+                           float * d,
                            const float * d0,
                            const float * u,
                            const float * v,
@@ -159,10 +196,10 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
 
 static void project_before_rb_step(grid_color color,
                               unsigned int n,
-                              float * restrict div,
+                              float * div,
                               const float * u,
                               const float * v,
-                              float * restrict p)
+                              float * p)
 {
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
@@ -186,8 +223,8 @@ static void project_before_rb_step(grid_color color,
 
 static void project_after_rb_step(grid_color color,
                               unsigned int n,
-                              float * restrict u,
-                              float * restrict v,
+                              float * u,
+                              float * v,
                               const float * p)
 {
     int shift = color == RED ? 1 : -1;

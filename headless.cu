@@ -16,19 +16,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <cuda_runtime.h>
+
+#include "cuda_helper.h"
 #include "indices.h"
-
 #include "wtime.h"
-
 /* macros */
+#include "solver.h"
 
 #define IX(x,y) (rb_idx((x),(y),(N+2)))
 
-
-/* external definitions (from solver.c) */
-
-extern void dens_step(int N, float* x, float* x0, float* u, float* v, float diff, float dt);
-extern void vel_step(int N, float* u, float* v, float* u0, float* v0, float visc, float dt);
 
 /* global variables */
 
@@ -50,29 +47,36 @@ static float *dens, *dens_prev;
 static void free_data(void)
 {
     if (u) {
-        free(u);
+        checkCudaCall(cudaFree(u));
     }
     if (v) {
-        free(v);
+        checkCudaCall(cudaFree(v));
     }
     if (u_prev) {
-        free(u_prev);
+        checkCudaCall(cudaFree(u_prev));
     }
     if (v_prev) {
-        free(v_prev);
+        checkCudaCall(cudaFree(v_prev));
     }
     if (dens) {
-        free(dens);
+        checkCudaCall(cudaFree(dens));
     }
     if (dens_prev) {
-        free(dens_prev);
+        checkCudaCall(cudaFree(dens_prev));
     }
 }
 
 static void clear_data(void)
 {
     int i, size = (N + 2) * (N + 2);
+    // int size = (N + 2) * (N + 2);
 
+    // checkCudaCall(cudaMemSet(u, 0, size))
+    // checkCudaCall(cudaMemSet(v, 0, size))
+    // checkCudaCall(cudaMemSet(u_prev, 0, size))
+    // checkCudaCall(cudaMemSet(v_prev, 0, size))
+    // checkCudaCall(cudaMemSet(dens, 0, size))
+    // checkCudaCall(cudaMemSet(dens_prev, 0, size))
     for (i = 0; i < size; i++) {
         u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = 0.0f;
     }
@@ -82,17 +86,12 @@ static int allocate_data(void)
 {
     int size = (N + 2) * (N + 2);
 
-    u = (float*)malloc(size * sizeof(float));
-    v = (float*)malloc(size * sizeof(float));
-    u_prev = (float*)malloc(size * sizeof(float));
-    v_prev = (float*)malloc(size * sizeof(float));
-    dens = (float*)malloc(size * sizeof(float));
-    dens_prev = (float*)malloc(size * sizeof(float));
-
-    if (!u || !v || !u_prev || !v_prev || !dens || !dens_prev) {
-        fprintf(stderr, "cannot allocate data\n");
-        return (0);
-    }
+    checkCudaCall(cudaMallocManaged(&u, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&v, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&u_prev, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&v_prev, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&dens, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&dens_prev, size * sizeof(float)));
 
     return (1);
 }
