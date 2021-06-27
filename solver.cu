@@ -9,7 +9,7 @@
 #define IX(y,x) (rb_idx((y),(x),(n+2)))
 #define IXX(y, x, stride) ((x) + (y) * (stride))
 
-#define BLOCK_SIZE 1
+#define BLOCK_SIZE 32
 
 #define SWAP(x0, x)      \
     {                    \

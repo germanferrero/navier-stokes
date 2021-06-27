@@ -1,5 +1,5 @@
 CU=nvcc
-CUFLAGS=-O1 -arch=sm_86 -Xcompiler=-O1 -Xcompiler=-march=native  -Xcompiler=-Wall -Xcompiler=-Wextra $(CUEXTRAFLAGS)
+CUFLAGS=-O2 -arch=sm_86 -Xcompiler=-O1 -Xcompiler=-march=native -Xcompiler=-fopenmp -Xcompiler=-ffast-math -Xcompiler=-ftree-vectorize -Xcompiler=-Wall -Xcompiler=-Wextra $(CUEXTRAFLAGS)
 
 TARGETS=demo headless test
 SOURCES=$(shell echo *.cu)
