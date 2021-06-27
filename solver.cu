@@ -254,27 +254,53 @@ void launcher_project_before_rb_step(
     cudaGetLastError();
     cudaDeviceSynchronize();
 }
-static void project_after_rb_step(grid_color color,
-                              unsigned int n,
-                              float * u,
-                              float * v,
-                              const float * p)
+
+__global__ void kernel_project_after_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * u,
+    float * v,
+    const float * p)
 {
-    int shift = color == RED ? 1 : -1;
-    unsigned int start = color == RED ? 0 : 1;
-
     unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int index = IXX(y, x, width);
 
-    #pragma omp parallel for default(none) shared(u, v, p) firstprivate(n, shift, start, width)
-    for (unsigned int y = 1; y <= n; ++y) {
-        const int p_shift = y % 2 == 0 ? -shift: shift;
-        const int p_start = y % 2 == 0 ? 1 - start: start;
-        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
-            int index = IXX(y, x, width);
-            u[index] -= 0.5f * n * (p[index + width] - p[index - width]);
-            v[index] -= 0.5f * n * ((p_shift * p[index + p_shift]) + (-p_shift * p[index]));
-        }
+    int start_first_row = color == RED ? 0 : 1;
+    int start = y % 2 == 1 ? start_first_row : 1 - start_first_row;
+    if (x < start) {
+        return;
     }
+    if (x >= width + start - 1) {
+        return;
+    }
+    if (y == 0 || y >= n+1) {
+        return;
+    }
+
+    int shift_first_row = color == RED ? 1 : -1;
+    int shift = y % 2 == 1 ? shift_first_row: -shift_first_row;
+    u[index] -= 0.5f * n * (p[index + width] - p[index - width]);
+    v[index] -= 0.5f * n * ((shift * p[index + shift]) + (-shift * p[index]));
+}
+
+void launcher_project_after_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * u,
+    float * v,
+    const float * p
+)
+{
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(n + 2, (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
+    kernel_project_after_rb_step<<<grid, block>>>(color, n, u, v, p);
+    cudaGetLastError();
+    cudaDeviceSynchronize();
 }
 
 static void project(unsigned int n, float* u, float* v, float* p, float* div)
@@ -295,8 +321,8 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    project_after_rb_step(RED, n, red_u, red_v, blk_p);
-    project_after_rb_step(BLACK, n, blk_u, blk_v, red_p);
+    launcher_project_after_rb_step(RED, n, red_u, red_v, blk_p);
+    launcher_project_after_rb_step(BLACK, n, blk_u, blk_v, red_p);
     launcher_set_bnd(n, VERTICAL, u);
     launcher_set_bnd(n, HORIZONTAL, v);
 }
