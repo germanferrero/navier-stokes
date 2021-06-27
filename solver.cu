@@ -201,33 +201,59 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     launcher_set_bnd(n, b, d);
 }
 
-static void project_before_rb_step(grid_color color,
-                              unsigned int n,
-                              float * div,
-                              const float * u,
-                              const float * v,
-                              float * p)
+__global__ void kernel_project_before_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * div,
+    const float * u,
+    const float * v,
+    float * p
+)
 {
-    int shift = color == RED ? 1 : -1;
-    unsigned int start = color == RED ? 0 : 1;
-
     unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int index = IXX(y, x, width);
 
-    #pragma omp parallel for default(none) shared(u, v, div, p) firstprivate(n, shift, start, width)
-    for (unsigned int y = 1; y <= n; ++y) {
-        const int p_shift = y % 2 == 0 ? -shift: shift;
-        const int p_start = y % 2 == 0 ? 1 - start: start;
-        for (unsigned int x = p_start; x < width - (1 - p_start); ++x) {
-            int index = IXX(y, x, width);
-            div[index] = -0.5f * (u[index + width] -
-                                  u[index - width] +
-                                  (p_shift * v[index + p_shift]) +
-                                  (-p_shift * v[index])) / n;
-            p[index] = 0;
-        }
-    } 
+    int start_first_row = color == RED ? 0 : 1;
+    int start = y % 2 == 1 ? start_first_row : 1 - start_first_row;
+    if (x < start) {
+        return;
+    }
+    if (x >= width + start - 1) {
+        return;
+    }
+    if (y == 0 || y >= n+1) {
+        return;
+    }
+
+    int shift_first_row = color == RED ? 1 : -1;
+    int shift = y % 2 == 1 ? shift_first_row: -shift_first_row;
+    div[index] = -0.5f * (u[index + width] -
+                          u[index - width] +
+                          (shift * v[index + shift]) +
+                          (-shift * v[index])) / n;
+    p[index] = 0;
 }
 
+void launcher_project_before_rb_step(
+    grid_color color,
+    unsigned int n,
+    float * div,
+    const float * u,
+    const float * v,
+    float * p
+)
+{
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(n + 2, (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
+    kernel_project_before_rb_step<<<grid, block>>>(color, n, div, u, v, p);
+    cudaGetLastError();
+    cudaDeviceSynchronize();
+}
 static void project_after_rb_step(grid_color color,
                               unsigned int n,
                               float * u,
@@ -262,8 +288,8 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
     float * blk_div = div + color_size;
     float * red_p = p;
     float * blk_p = p + color_size;
-    project_before_rb_step(RED, n, red_div, blk_u, blk_v, red_p);
-    project_before_rb_step(BLACK, n, blk_div, red_u, red_v, blk_p);
+    launcher_project_before_rb_step(RED, n, red_div, blk_u, blk_v, red_p);
+    launcher_project_before_rb_step(BLACK, n, blk_div, red_u, red_v, blk_p);
     launcher_set_bnd(n, NONE, div);
     launcher_set_bnd(n, NONE, p);
 
