@@ -91,7 +91,8 @@ static void add_source(unsigned int n, float* x, const float* s, float dt)
     }
 }
 
-static void set_bnd(unsigned int n, boundary b, float* x)
+
+__global__ void kernel_set_bnd(unsigned int n, boundary b, float* x)
 {
     for (unsigned int i = 1; i <= n; i++) {
         x[IX(0, i)] = b == VERTICAL ? -x[IX(1, i)] : x[IX(1, i)];
@@ -105,6 +106,12 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
 
+void launcher_set_bnd(unsigned int n, boundary b, float* x)
+{
+    kernel_set_bnd<<<1,1>>>(n, b, x);
+    cudaGetLastError();
+    cudaDeviceSynchronize();
+}
 
 static void lin_solve(unsigned int n, boundary b,
                       float * x,
@@ -120,7 +127,7 @@ static void lin_solve(unsigned int n, boundary b,
     for (unsigned int k = 0; k < 20; ++k) {
         launcher_linsolve_rb_step(RED, n, a, c, red0, blk, red);
         launcher_linsolve_rb_step(BLACK, n, a, c, blk0, red, blk);
-        set_bnd(n, b, x);
+        launcher_set_bnd(n, b, x);
     }
 }
 
@@ -191,7 +198,7 @@ static void advect(unsigned int n, boundary b, float* d, const float* d0, const 
     float dt0 = dt * n;
     advect_rb_step(RED, n, red_d, d0, red_u, red_v, dt0);
     advect_rb_step(BLACK, n, blk_d, d0, blk_u, blk_v, dt0);
-    set_bnd(n, b, d);
+    launcher_set_bnd(n, b, d);
 }
 
 static void project_before_rb_step(grid_color color,
@@ -257,15 +264,15 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
     float * blk_p = p + color_size;
     project_before_rb_step(RED, n, red_div, blk_u, blk_v, red_p);
     project_before_rb_step(BLACK, n, blk_div, red_u, red_v, blk_p);
-    set_bnd(n, NONE, div);
-    set_bnd(n, NONE, p);
+    launcher_set_bnd(n, NONE, div);
+    launcher_set_bnd(n, NONE, p);
 
     lin_solve(n, NONE, p, div, 1, 4);
 
     project_after_rb_step(RED, n, red_u, red_v, blk_p);
     project_after_rb_step(BLACK, n, blk_u, blk_v, red_p);
-    set_bnd(n, VERTICAL, u);
-    set_bnd(n, HORIZONTAL, v);
+    launcher_set_bnd(n, VERTICAL, u);
+    launcher_set_bnd(n, HORIZONTAL, v);
 }
 
 void dens_step(unsigned int n, float* x, float* x0, float* u, float* v, float diff, float dt)
