@@ -83,10 +83,12 @@ void launcher_linsolve_rb_step(grid_color color,
     cudaDeviceSynchronize();
 }
 
-__global__ void kernel_add_source(float* x, const float* s, float dt)
+__global__ void kernel_add_source(unsigned int n, float* x, const float* s, float dt)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    x[idx] += dt * s[idx];
+    if (idx < (n + 2) * (n + 2)) {
+        x[idx] += dt * s[idx];
+    }
 }
 
 void launcher_add_source(unsigned int n, float* x, const float* s, float dt)
@@ -94,7 +96,7 @@ void launcher_add_source(unsigned int n, float* x, const float* s, float dt)
     dim3 block(BLOCK_SIZE);
     unsigned int N_BLOCKS = div_ceil((n + 2) * (n + 2), (uint) BLOCK_SIZE);
     dim3 grid(N_BLOCKS);
-    kernel_add_source<<<grid, block>>>(x, s, dt);
+    kernel_add_source<<<grid, block>>>(n, x, s, dt);
 }
 
 __global__ void kernel_set_bnd(unsigned int n, boundary b, float* x)
