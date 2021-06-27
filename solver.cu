@@ -29,6 +29,22 @@ T div_ceil(T a, T b) {
     return (a + b - 1) / b;
 }
 
+__global__ void kernel_get_velocity2(float * velocity2, unsigned int n, const float* u, const float* v) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < (n + 2) * (n + 2)) {
+        velocity2[idx] = u[idx] * u[idx] + v[idx] * v[idx];
+    }
+}
+
+void launcher_get_velocity2(float * velocity2, unsigned int n, const float* u, const float* v) {
+    dim3 block(BLOCK_SIZE);
+    unsigned int N_BLOCKS = div_ceil((n + 2) * (n + 2), (uint) BLOCK_SIZE);
+    dim3 grid(N_BLOCKS);
+    kernel_get_velocity2<<<grid, block>>>(velocity2, n, u, v);
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
+}
+
 __global__ void kernel_linsolve_rb_step(grid_color color,
                                         unsigned int n,
                                         float a,

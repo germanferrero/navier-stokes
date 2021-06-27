@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda_runtime.h>
+#include <cub/cub.cuh>
 
 #include "cuda_helper.h"
 #include "wtime.h"
@@ -35,6 +36,7 @@ static float force, source;
 
 static float *u, *v, *u_prev, *v_prev;
 static float *dens, *dens_prev;
+static float *velocity2;
 
 
 /*
@@ -64,6 +66,9 @@ static void free_data(void)
     if (dens_prev) {
         checkCudaCall(cudaFree(dens_prev));
     }
+    if (velocity2) {
+        checkCudaCall(cudaFree(velocity2));
+    }
 }
 
 static void clear_data(void)
@@ -71,7 +76,7 @@ static void clear_data(void)
     int i, size = (N + 2) * (N + 2);
 
     for (i = 0; i < size; i++) {
-        u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = 0.0f;
+        u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = velocity2[i] = 0.0f;
     }
 }
 
@@ -85,35 +90,41 @@ static int allocate_data(void)
     checkCudaCall(cudaMallocManaged(&v_prev, size * sizeof(float)));
     checkCudaCall(cudaMallocManaged(&dens, size * sizeof(float)));
     checkCudaCall(cudaMallocManaged(&dens_prev, size * sizeof(float)));
+    checkCudaCall(cudaMallocManaged(&velocity2, size * sizeof(float)));
 
     return (1);
 }
 
-static void react(float* d, float* u, float* v)
+static void react(float* velocity2, float* d, float* u, float* v)
 {
-    int i, size = (N + 2) * (N + 2);
-    float max_velocity2 = 0.0f;
-    float max_density = 0.0f;
+    int size = (N + 2) * (N + 2);
+    float *max_velocity2;
+    checkCudaCall(cudaMallocManaged(&max_velocity2, sizeof(float)));
+    float *max_density;
+    checkCudaCall(cudaMallocManaged(&max_density, sizeof(float)));
 
-    max_velocity2 = max_density = 0.0f;
-    for (i = 0; i < size; i++) {
-        if (max_velocity2 < u[i] * u[i] + v[i] * v[i]) {
-            max_velocity2 = u[i] * u[i] + v[i] * v[i];
-        }
-        if (max_density < d[i]) {
-            max_density = d[i];
-        }
-    }
+    launcher_get_velocity2(velocity2, N, u, v);
+    void *v2_temp_storage = NULL;
+    size_t v2_temp_storage_bytes = 0;
+    cub::DeviceReduce::Max(v2_temp_storage, v2_temp_storage_bytes, velocity2, max_velocity2, size);
+    checkCudaCall(cudaMalloc(&v2_temp_storage, v2_temp_storage_bytes));
+    cub::DeviceReduce::Max(v2_temp_storage, v2_temp_storage_bytes, velocity2, max_velocity2, size);
+    
+    void *d_temp_storage = NULL;
+    size_t d_temp_storage_bytes = 0;
+    cub::DeviceReduce::Max(d_temp_storage, d_temp_storage_bytes, d, max_density, size);
+    checkCudaCall(cudaMalloc(&d_temp_storage, d_temp_storage_bytes));
+    cub::DeviceReduce::Max(d_temp_storage, d_temp_storage_bytes, d, max_density, size);
 
-    for (i = 0; i < size; i++) {
-        u[i] = v[i] = d[i] = 0.0f;
-    }
+    checkCudaCall(cudaMemset(u, 0, size * sizeof(float)));
+    checkCudaCall(cudaMemset(v, 0, size * sizeof(float)));
+    checkCudaCall(cudaMemset(d, 0, size * sizeof(float)));
 
-    if (max_velocity2 < 0.0000005f) {
+    if (*max_velocity2 < 0.0000005f) {
         u[IX(N / 2, N / 2)] = force * 10.0f;
         v[IX(N / 2, N / 2)] = force * 10.0f;
     }
-    if (max_density < 1.0f) {
+    if (*max_density < 1.0f) {
         d[IX(N / 2, N / 2)] = source * 10.0f;
     }
 
@@ -136,7 +147,7 @@ static void dump_data(void)
 
 static void one_step(void)
 {
-    react(dens_prev, u_prev, v_prev);
+    react(velocity2, dens_prev, u_prev, v_prev);
     vel_step(N, u, v, u_prev, v_prev, visc, dt);
     dens_step(N, dens, dens_prev, u, v, diff, dt);
 }
