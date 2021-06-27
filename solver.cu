@@ -29,7 +29,7 @@ T div_ceil(T a, T b) {
     return (a + b - 1) / b;
 }
 
-__global__ void kernel_linsolve(grid_color color,
+__global__ void kernel_linsolve_rb_step(grid_color color,
                                         unsigned int n,
                                         float a,
                                         float c,
@@ -65,7 +65,7 @@ __global__ void kernel_linsolve(grid_color color,
     )) / c;
 }
 
-void lin_solve_rb_step(grid_color color,
+void launcher_linsolve_rb_step(grid_color color,
                               unsigned int n,
                               float a,
                               float c,
@@ -118,8 +118,8 @@ static void lin_solve(unsigned int n, boundary b,
     float * blk = x + color_size;
     
     for (unsigned int k = 0; k < 20; ++k) {
-        lin_solve_rb_step(RED, n, a, c, red0, blk, red);
-        lin_solve_rb_step(BLACK, n, a, c, blk0, red, blk);
+        launcher_linsolve_rb_step(RED, n, a, c, red0, blk, red);
+        launcher_linsolve_rb_step(BLACK, n, a, c, blk0, red, blk);
         set_bnd(n, b, x);
     }
 }
