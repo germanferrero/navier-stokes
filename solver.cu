@@ -79,8 +79,8 @@ void launcher_linsolve_rb_step(grid_color color,
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_linsolve_rb_step<<<grid, block>>>(color, n, a, c, same0, neigh, same);
-    cudaGetLastError();
-    cudaDeviceSynchronize();
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
 }
 
 __global__ void kernel_add_source(unsigned int n, float* x, const float* s, float dt)
@@ -116,8 +116,8 @@ __global__ void kernel_set_bnd(unsigned int n, boundary b, float* x)
 void launcher_set_bnd(unsigned int n, boundary b, float* x)
 {
     kernel_set_bnd<<<1,1>>>(n, b, x);
-    cudaGetLastError();
-    cudaDeviceSynchronize();
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
 }
 
 static void lin_solve(unsigned int n, boundary b,
@@ -213,8 +213,8 @@ void launcher_advect_rb_step(
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_advect_rb_step<<<grid, block>>>(color, n, d, d0, u, v, dt0);
-    cudaGetLastError();
-    cudaDeviceSynchronize();
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
 }
 
 static void advect(unsigned int n, boundary b, float* d, const float* d0, const float* u, const float* v, float dt)
@@ -282,8 +282,8 @@ void launcher_project_before_rb_step(
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_project_before_rb_step<<<grid, block>>>(color, n, div, u, v, p);
-    cudaGetLastError();
-    cudaDeviceSynchronize();
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
 }
 
 __global__ void kernel_project_after_rb_step(
@@ -330,8 +330,8 @@ void launcher_project_after_rb_step(
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_project_after_rb_step<<<grid, block>>>(color, n, u, v, p);
-    cudaGetLastError();
-    cudaDeviceSynchronize();
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
 }
 
 static void project(unsigned int n, float* u, float* v, float* p, float* div)
