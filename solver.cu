@@ -83,14 +83,19 @@ void launcher_linsolve_rb_step(grid_color color,
     cudaDeviceSynchronize();
 }
 
-static void add_source(unsigned int n, float* x, const float* s, float dt)
+__global__ void kernel_add_source(float* x, const float* s, float dt)
 {
-    unsigned int size = (n + 2) * (n + 2);
-    for (unsigned int i = 0; i < size; i++) {
-        x[i] += dt * s[i];
-    }
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    x[idx] += dt * s[idx];
 }
 
+void launcher_add_source(unsigned int n, float* x, const float* s, float dt)
+{
+    dim3 block(BLOCK_SIZE);
+    unsigned int N_BLOCKS = div_ceil((n + 2) * (n + 2), (uint) BLOCK_SIZE);
+    dim3 grid(N_BLOCKS);
+    kernel_add_source<<<grid, block>>>(x, s, dt);
+}
 
 __global__ void kernel_set_bnd(unsigned int n, boundary b, float* x)
 {
@@ -353,7 +358,7 @@ static void project(unsigned int n, float* u, float* v, float* p, float* div)
 
 void dens_step(unsigned int n, float* x, float* x0, float* u, float* v, float diff, float dt)
 {
-    add_source(n, x, x0, dt);
+    launcher_add_source(n, x, x0, dt);
     SWAP(x0, x);
     diffuse(n, NONE, x, x0, diff, dt);
     SWAP(x0, x);
@@ -362,8 +367,8 @@ void dens_step(unsigned int n, float* x, float* x0, float* u, float* v, float di
 
 void vel_step(unsigned int n, float* u, float* v, float* u0, float* v0, float visc, float dt)
 {
-    add_source(n, u, u0, dt);
-    add_source(n, v, v0, dt);
+    launcher_add_source(n, u, u0, dt);
+    launcher_add_source(n, v, v0, dt);
     SWAP(u0, u);
     diffuse(n, VERTICAL, u, u0, visc, dt);
     SWAP(v0, v);
