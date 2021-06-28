@@ -9,7 +9,7 @@
 #define IX(y,x) (rb_idx((y),(x),(n+2)))
 #define IXX(y, x, stride) ((x) + (y) * (stride))
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 
 #define SWAP(x0, x)      \
     {                    \
@@ -28,6 +28,33 @@ template <typename T>
 T div_ceil(T a, T b) {
     return (a + b - 1) / b;
 }
+
+__global__ void kernel_add_forces(float *max_velocity2, unsigned int n, float force, float * u, float * v){
+    if (*max_velocity2 < 0.0000005f) {
+        u[IX(n / 2, n / 2)] = force * 10.0f;
+        v[IX(n / 2, n / 2)] = force * 10.0f;
+    }
+}
+
+void launcher_add_forces(float *max_velocity2, unsigned int n, float force, float * u, float * v){
+    kernel_add_forces<<<1,1>>>(max_velocity2, n, force, u, v);
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
+}
+
+__global__ void kernel_add_densities(float *max_density, unsigned int n, float source, float * d){
+    if (*max_density < 1.0f) {
+        d[IX(n / 2, n / 2)] = source * 10.0f;
+    }
+}
+
+
+void launcher_add_densities(float *max_density, unsigned int n, float source, float * d){
+    kernel_add_densities<<<1,1>>>(max_density, n, source, d);
+    checkCudaCall(cudaGetLastError());
+    checkCudaCall(cudaDeviceSynchronize());
+}
+
 
 __global__ void kernel_get_velocity2(float * velocity2, unsigned int n, const float* u, const float* v) {
     unsigned int width = (n + 2) / 2;

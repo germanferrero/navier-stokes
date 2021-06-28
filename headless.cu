@@ -119,13 +119,8 @@ static void react(float* velocity2, float* d, float* u, float* v)
     checkCudaCall(cudaMemset(v, 0, size * sizeof(float)));
     checkCudaCall(cudaMemset(d, 0, size * sizeof(float)));
 
-    if (*max_velocity2 < 0.0000005f) {
-        u[IX(N / 2, N / 2)] = force * 10.0f;
-        v[IX(N / 2, N / 2)] = force * 10.0f;
-    }
-    if (*max_density < 1.0f) {
-        d[IX(N / 2, N / 2)] = source * 10.0f;
-    }
+    launcher_add_forces(max_velocity2, N, force, u, v);
+    launcher_add_densities(max_density, N, source, d);
 
     return;
 }
