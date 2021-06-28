@@ -30,16 +30,22 @@ T div_ceil(T a, T b) {
 }
 
 __global__ void kernel_get_velocity2(float * velocity2, unsigned int n, const float* u, const float* v) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < (n + 2) * (n + 2)) {
-        velocity2[idx] = u[idx] * u[idx] + v[idx] * v[idx];
+    unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x > (n + 1) || y > (n + 1)){
+        return;
     }
+    int index = IXX(y, x, width);
+    velocity2[index] = u[index] * u[index] + v[index] * v[index];
 }
 
 void launcher_get_velocity2(float * velocity2, unsigned int n, const float* u, const float* v) {
-    dim3 block(BLOCK_SIZE);
-    unsigned int N_BLOCKS = div_ceil((n + 2) * (n + 2), (uint) BLOCK_SIZE);
-    dim3 grid(N_BLOCKS);
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(2 * (n + 2), (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_get_velocity2<<<grid, block>>>(velocity2, n, u, v);
     checkCudaCall(cudaGetLastError());
     checkCudaCall(cudaDeviceSynchronize());
@@ -99,39 +105,76 @@ void launcher_linsolve_rb_step(grid_color color,
     checkCudaCall(cudaDeviceSynchronize());
 }
 
-__global__ void kernel_add_source(unsigned int n, float* x, const float* s, float dt)
+__global__ void kernel_add_source(unsigned int n, float* m, const float* s, float dt)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < (n + 2) * (n + 2)) {
-        x[idx] += dt * s[idx];
+    unsigned int width = (n + 2) / 2;
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x > (n + 1) || y > (n + 1)){
+        return;
     }
+    int index = IXX(y, x, width);
+    m[index] += dt * s[index];
 }
 
 void launcher_add_source(unsigned int n, float* x, const float* s, float dt)
 {
-    dim3 block(BLOCK_SIZE);
-    unsigned int N_BLOCKS = div_ceil((n + 2) * (n + 2), (uint) BLOCK_SIZE);
-    dim3 grid(N_BLOCKS);
+    unsigned int width = (n + 2) / 2;
+    unsigned int N_BLOCKS_X = div_ceil(width, (uint) BLOCK_SIZE);
+    unsigned int N_BLOCKS_Y = div_ceil(2 * (n + 2), (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS_X, N_BLOCKS_Y);
     kernel_add_source<<<grid, block>>>(n, x, s, dt);
 }
 
-__global__ void kernel_set_bnd(unsigned int n, boundary b, float* x)
+
+__global__ void kernel_set_bnd(unsigned int n, boundary b, float* m)
 {
-    for (unsigned int i = 1; i <= n; i++) {
-        x[IX(0, i)] = b == VERTICAL ? -x[IX(1, i)] : x[IX(1, i)];
-        x[IX(n + 1, i)] = b == VERTICAL ? -x[IX(n, i)] : x[IX(n, i)];
-        x[IX(i, 0)] = b == HORIZONTAL ? -x[IX(i, 1)] : x[IX(i, 1)];
-        x[IX(i, n + 1)] = b == HORIZONTAL ? -x[IX(i, n)] : x[IX(i, n)];
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x > (n + 1) || y > (n + 1)){
+        return;
     }
-    x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
-    x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
-    x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
-    x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
+    
+    int index = IX(x, y);
+
+    if (x == 0){
+        if (y == 0){
+            m[index] = 0.5f * (m[IX(1, 0)] + m[IX(0, 1)]);
+        }
+        if (y == n+1){
+            m[index] = 0.5f * (m[IX(1, n + 1)] + m[IX(0, n)]);
+        }
+        else {
+            m[index] = b == VERTICAL ? -m[IX(1, y)] : m[IX(1, y)];
+        }
+    }
+    else if (x == n+1) {
+        if (y == 0){
+            m[index] = 0.5f * (m[IX(n, 0)] + m[IX(n + 1, 1)]);
+        }
+        if (y == n+1){
+            m[index] = 0.5f * (m[IX(n, n + 1)] + m[IX(n + 1, n)]);
+        }
+        else {
+            m[index] = b == VERTICAL ? -m[IX(n, y)] : m[IX(n, y)];
+        }
+    }
+    else if (y == 0) {
+        m[index] = b == HORIZONTAL ? -m[IX(x, 1)] : m[IX(x, 1)];
+    }
+    else if (y == n+1) {
+        m[index] = b == HORIZONTAL ? -m[IX(x, n)] : m[IX(x, n)];
+    }
 }
 
 void launcher_set_bnd(unsigned int n, boundary b, float* x)
 {
-    kernel_set_bnd<<<1,1>>>(n, b, x);
+    unsigned int N_BLOCKS = div_ceil(n + 2, (uint) BLOCK_SIZE);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(N_BLOCKS, N_BLOCKS);
+    kernel_set_bnd<<<grid, block>>>(n, b, x);
     checkCudaCall(cudaGetLastError());
     checkCudaCall(cudaDeviceSynchronize());
 }
